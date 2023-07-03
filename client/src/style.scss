@@ -1,0 +1,10 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import "styles/global";
+
+.dp__theme_light {
+   --dp-primary-color: #1f948e;
+   --dp-success-color: #1f948e;
+}

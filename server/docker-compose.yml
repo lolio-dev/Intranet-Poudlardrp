@@ -1,0 +1,18 @@
+version: "1.0"
+
+services:
+  mariaDb:
+    image: mariadb:latest
+    restart: always
+    environment:
+      - MARIADB_ROOT_PASSWORD=${MARIA_PASSWORD}
+      - MARIADB_DATABASE=${MARIA_DATABASE}
+      - LANG=C.UTF-8
+    volumes:
+      - type: volume
+        source: db-data
+        target: /var/lib/mysql/
+    ports:
+      - "${MARIA_PORT}:3306"
+volumes:
+  db-data:

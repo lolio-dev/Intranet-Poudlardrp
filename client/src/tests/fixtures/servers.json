@@ -1,0 +1,37 @@
+[
+  {
+    "id": "lobby1",
+    "name": "Lobby - 01",
+    "state": "running",
+    "type": "LOB",
+    "players": "254"
+  },
+  {
+    "id": "mmo1",
+    "name": "ULTRA-MMO - 01",
+    "state": "crashed",
+    "type": "MMO",
+    "players": "002"
+  },
+  {
+    "id": "dev1",
+    "name": "DEV - 01",
+    "state": "crashed",
+    "type": "DEV",
+    "players": "012"
+  },
+  {
+    "id": "mmo2",
+    "name": "MMO - 02",
+    "state": "starting",
+    "type": "MMO",
+    "players": "169"
+  },
+  {
+    "id": "dev2",
+    "name": "DEV - 02",
+    "state": "crashed",
+    "type": "DEV",
+    "players": "785"
+  }
+]

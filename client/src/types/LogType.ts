@@ -1,0 +1,1 @@
+export type LogType = "error" | "warning" | "info"

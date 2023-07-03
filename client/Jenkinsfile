@@ -1,0 +1,120 @@
+def branch = env.BRANCH_NAME.toLowerCase().replace("/","-")
+def shouldPublish = !branch.contains("pr-") && !branch.contains("renovate")
+pipeline {
+  agent any 
+
+  stages {
+    stage('Dependencies') {
+      tools {
+        nodejs 'Intranet'
+      }    
+      steps {
+        sh 'yarn'
+      }
+    }
+
+    stage('Build') { 
+      tools {
+        nodejs 'Intranet'
+      }    
+      steps {
+        script {
+          if(branch == "main") {
+            sh "yarn build"
+          }
+          else {
+            sh "sed -i \"s|''|'$branch'|g\" ./src/constants.ts"
+            sh "yarn build --base=/$branch/"
+          }
+        }
+      }
+    }
+
+    stage('Docker Build') {  
+      steps {
+        script {
+          def tag = branch
+          if(tag == "main") {
+            tag = "latest"    
+          }    
+
+          lastImage = sh (script: "docker images --filter=reference=docker.poudlardrp.fr/intranet/front:${tag} --format '{{.ID}}'", returnStdout: true)    
+          withCredentials([usernamePassword(credentialsId: 'jenkins-nexus-account', passwordVariable: 'NEXUS_PASSWORD', usernameVariable: 'NEXUS_USERNAME')]) {    
+            image = docker.build("docker.poudlardrp.fr/intranet/front:${tag}","--build-arg NEXUS_USERNAME=${NEXUS_USERNAME} --build-arg NEXUS_PASSWORD=${NEXUS_PASSWORD} .")    
+          }
+        }
+      }
+    }    
+
+    stage('Docker Publish') {    
+      when {
+        expression {
+         return shouldPublish
+        }
+      }
+      steps {
+        script {
+          image.push()    
+        }
+      }
+    }    
+
+    stage('Docker Clean') {    
+      when {
+        expression {
+         return shouldPublish
+        }
+      }
+      steps {
+        script {
+          if(lastImage != "") {    
+            try {    
+              sh "docker rmi ${lastImage}"    
+            } catch (err){    
+              echo err.getMessage()    
+            }    
+          }    
+        } 
+      }
+    }
+
+    stage('Docker Deploy') {
+      when {
+        expression {
+          return env.BRANCH_NAME != 'main' && shouldPublish
+        }
+      }
+      agent {
+        label 'dev01'
+      }
+      steps {
+        script {
+          try {
+            sh "docker stop intranet_front_$branch"
+            sh "docker rm intranet_front_$branch"
+          } catch (err) {
+            echo err.getMessage()
+          }
+          echo image.id
+          sh "docker pull ${image.id}"
+          sh "docker run -d --name intranet_front_$branch --network traefik -l traefik.enable=true -l \"traefik.http.routers.intranet_front_${branch}.rule=Host(\\`dev.intranet.poudlardrp.fr\\`) && PathPrefix(\\`/$branch\\`)\" -l traefik.http.routers.intranet_front_${branch}.tls.certresolver=letsencrypt -l traefik.http.middlewares.intranet_front_${branch}.stripprefix.prefixes=/$branch -l traefik.http.routers.intranet_front_${branch}.middlewares=intranet_front_${branch}@docker ${image.id}"
+        }
+      }
+    }
+
+    stage('Docker Deploy: Production') {
+      when {
+        expression {
+          return env.BRANCH_NAME == 'main' && shouldPublish
+        }
+      }
+      /*agent {
+        label 'prod01'
+      }*/
+      steps {
+        echo "TODO"
+        //TODO a faire lors de la mise en prod avec un docker-compose sur le prod01
+      }
+    }
+  }
+}

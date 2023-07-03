@@ -1,0 +1,90 @@
+def lastImage    
+def image    
+pipeline {
+	agent any
+
+	tools {
+		nodejs 'Intranet'
+	}
+
+	stages {
+		stage("Build") {
+			steps {
+				sh 'yarn'
+				sh 'yarn build'
+			}
+		}
+		stage("Unit Test") {
+			steps {
+				sh 'yarn test'
+			}
+		}
+		stage("Test e2e") {
+			steps {
+				script {
+					docker.image("mariadb:focal")
+					.withRun("-P --env MARIADB_ROOT_PASSWORD=password --env MARIADB_DATABASE=intranet --env LANG=C.UTF-8") {c -> 
+						def port = c.port(3306).split(":")[1]
+						sleep(time:5, unit:"SECONDS")
+						withEnv(["MARIA_PORT=$port", 'MARIA_USER=root', 'MARIA_PASSWORD=password', 'MARIA_DATABASE=intranet', 'MARIA_HOST=localhost']) {
+							sh 'yarn test:e2e'
+						}
+					}
+				}
+		}
+		}
+		stage('Docker Build') {  
+			when {
+				expression {
+					return env.BRANCH_NAME == 'main'
+				}
+			}
+			steps {
+				script {
+					def tag = env.BRANCH_NAME.toLowerCase()    
+					if(tag == "main") {    
+						tag = "latest"    
+					}    
+
+					lastImage = sh (script: "docker images --filter=reference=docker.poudlardrp.fr/intranet/back:${tag} --format '{{.ID}}'", returnStdout: true)    
+					withCredentials([usernamePassword(credentialsId: 'jenkins-nexus-account', passwordVariable: 'NEXUS_PASSWORD', usernameVariable: 'NEXUS_USERNAME')]) {    
+						image = docker.build("docker.poudlardrp.fr/intranet/back:${tag}","--build-arg NEXUS_USERNAME=${NEXUS_USERNAME} --build-arg NEXUS_PASSWORD=${NEXUS_PASSWORD} .")    
+					}
+				}
+			}
+		}    
+
+		stage('Docker Publish') {    
+			when {
+				expression {
+					return env.BRANCH_NAME == 'main'
+				}
+			}
+			steps {
+				script {
+					image.push()    
+				}
+			}
+		}    
+
+		stage('Docker Clean') {
+			when {
+				expression {
+					return env.BRANCH_NAME == 'main'
+				}
+			}
+			steps {
+				script {
+
+					if(lastImage != "") {    
+						try {    
+							sh "docker rmi ${lastImage}"    
+						} catch (err){    
+							echo err.getMessage()    
+						}    
+					}    
+				} 
+			}
+		}
+	}
+}
